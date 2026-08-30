@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.grey[400],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 40),
               _buildInfoCard(),
               const SizedBox(height: 32),
               ElevatedButton.icon(
