@@ -22,18 +22,22 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
     with WidgetsBindingObserver {
   bool _isLocked = false;
   bool _isLoading = false;
+  late final TripCubit _tripCubit;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable();
+    _tripCubit = TripCubit(LocationRepository())
+      ..initialize(widget.fareConfig);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     WakelockPlus.disable();
+    _tripCubit.close();
     super.dispose();
   }
 
@@ -43,7 +47,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
-      final currentState = context.read<TripCubit>().state;
+      final currentState = _tripCubit.state;
 
       // Si estábamos esperando permiso, reintentar automáticamente
       if (currentState is TripError &&
@@ -52,7 +56,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
         // Pequeño delay para que el sistema actualice el estado de permisos
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
-            context.read<TripCubit>().retryPermission();
+            _tripCubit.retryPermission();
           }
         });
       }
@@ -63,9 +67,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
   Widget build(BuildContext context) {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-    return BlocProvider(
-      create: (_) =>
-          TripCubit(LocationRepository())..initialize(widget.fareConfig),
+    return BlocProvider.value(
+      value: _tripCubit,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
