@@ -1,6 +1,6 @@
 # moto_taxi
 
-A new Flutter project.
+A Flutter project.
 
 ## Getting Started
 
