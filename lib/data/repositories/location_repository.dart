@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/location_point.dart';
@@ -10,15 +11,24 @@ enum PermissionResult {
   serviceDisabled,
 }
 
+/// Repositorio de ubicación configurado para usar EXCLUSIVAMENTE el chip GPS
+/// del dispositivo, con la mejor precisión posible.
+///
+/// Nota: por defecto, Android usa el FusedLocationProviderClient, que mezcla
+/// GPS + red móvil + Wi-Fi para entregar una ubicación más rápida (aunque
+/// menos "pura"). Aquí forzamos el LocationManager clásico
+/// (forceLocationManager: true) para que Android use el proveedor GPS real
+/// y no caiga en triangulación por red. Esto puede tardar un poco más en
+/// obtener el primer punto, especialmente en interiores.
 class LocationRepository {
   StreamSubscription<Position>? _positionStream;
+  Timer? _signalHealthTimer;
   final _locationController = StreamController<LocationPoint>.broadcast();
   final _statusController = StreamController<GpsStatus>.broadcast();
 
   DateTime? _lastKnownTime;
   LocationPoint? _lastKnownPoint;
   bool _wasPaused = false;
-  LocationSource _currentSource = LocationSource.gps;
 
   Stream<LocationPoint> get locationStream => _locationController.stream;
   Stream<GpsStatus> get statusStream => _statusController.stream;
@@ -79,37 +89,28 @@ class LocationRepository {
   }
 
   Future<LocationPoint> getCurrentLocation() async {
-    Position? position;
-    LocationSource sourceUsed = LocationSource.gps;
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: _buildLocationSettings(),
+    ).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw TimeoutException(
+        'No se pudo obtener señal GPS. Sal a un lugar más despejado.',
+      ),
+    );
 
-    try {
-      position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-      ).timeout(const Duration(seconds: 8));
-    } catch (e) {
-      sourceUsed = LocationSource.network;
-      _statusController.add(GpsStatus.fallbackToNetwork);
-      position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
-      );
-    }
-
-    _lastKnownPoint = _mapToLocationPoint(position, sourceUsed);
+    _lastKnownPoint = _mapToLocationPoint(position);
     _lastKnownTime = DateTime.now();
-    _currentSource = sourceUsed;
 
     return _lastKnownPoint!;
   }
 
   void startTracking() {
     _positionStream?.cancel();
+    _signalHealthTimer?.cancel();
     _wasPaused = false;
 
     _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 3,
-      ),
+      locationSettings: _buildLocationSettings(),
     ).listen(
       _onPositionUpdate,
       onError: (error) {
@@ -118,20 +119,29 @@ class LocationRepository {
       },
     );
 
-    Timer.periodic(const Duration(seconds: 3), (_) => _checkSignalHealth());
+    _signalHealthTimer = Timer.periodic(
+        const Duration(seconds: 3), (_) => _checkSignalHealth());
+  }
+
+  /// Configuración de ubicación forzando GPS puro (sin red móvil/Wi-Fi).
+  LocationSettings _buildLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 3,
+        forceLocationManager: true, // Usa el proveedor GPS real, no el Fused
+      );
+    }
+    // iOS/otras plataformas no tienen un equivalente a "solo GPS": el
+    // sistema operativo administra la fuente internamente, pero
+    // bestForNavigation ya pide la máxima precisión disponible.
+    return const LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 3,
+    );
   }
 
   void _onPositionUpdate(Position position) {
-    final newSource =
-        position.accuracy < 15 ? LocationSource.gps : LocationSource.network;
-
-    if (_currentSource != newSource) {
-      _currentSource = newSource;
-      _statusController.add(newSource == LocationSource.gps
-          ? GpsStatus.recovered
-          : GpsStatus.usingNetwork);
-    }
-
     if (_lastKnownTime != null) {
       final gap = DateTime.now().difference(_lastKnownTime!);
       if (gap.inSeconds > 6 && _wasPaused) {
@@ -147,7 +157,7 @@ class LocationRepository {
       _statusController.add(GpsStatus.good);
     }
 
-    final point = _mapToLocationPoint(position, newSource);
+    final point = _mapToLocationPoint(position);
     _lastKnownPoint = point;
     _lastKnownTime = DateTime.now();
     _wasPaused = false;
@@ -168,6 +178,8 @@ class LocationRepository {
   void stopTracking() {
     _positionStream?.cancel();
     _positionStream = null;
+    _signalHealthTimer?.cancel();
+    _signalHealthTimer = null;
     _wasPaused = false;
   }
 
@@ -177,8 +189,7 @@ class LocationRepository {
     _statusController.close();
   }
 
-  LocationPoint _mapToLocationPoint(Position position, LocationSource source) =>
-      LocationPoint(
+  LocationPoint _mapToLocationPoint(Position position) => LocationPoint(
         latitude: position.latitude,
         longitude: position.longitude,
         accuracy: position.accuracy,
@@ -186,7 +197,6 @@ class LocationRepository {
         speed: position.speed,
         timestamp: position.timestamp ?? DateTime.now(),
         heading: position.heading,
-        source: source,
       );
 }
 
@@ -196,8 +206,6 @@ enum GpsStatus {
   poorAccuracy,
   lost,
   recovered,
-  usingNetwork,
-  fallbackToNetwork,
   serviceDisabled,
   permissionDenied,
   permissionDeniedForever,

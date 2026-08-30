@@ -27,6 +27,16 @@ class _FareSettingsScreenState extends State<FareSettingsScreen> {
     _loadConfig();
   }
 
+  @override
+  void dispose() {
+    _baseController.dispose();
+    _kmController.dispose();
+    _minController.dispose();
+    _minFareController.dispose();
+    _roundController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadConfig() async {
     _config = await _repo.getConfig();
     setState(() {

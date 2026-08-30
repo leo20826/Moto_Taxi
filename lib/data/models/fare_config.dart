@@ -34,9 +34,9 @@ class FareConfig extends Equatable {
 
   factory FareConfig.fromJson(Map<String, dynamic> json) => FareConfig(
         baseFare: json['baseFare']?.toDouble() ?? 15.0,
-        pricePerKm: json['pricePerKm']?.toDouble() ?? 8.0,
+        pricePerKm: json['pricePerKm']?.toDouble() ?? 10.0,
         pricePerMinute: json['pricePerMinute']?.toDouble() ?? 1.5,
         minimumFare: json['minimumFare']?.toDouble() ?? 20.0,
-        roundTo: json['roundTo'] ?? 50,
+        roundTo: json['roundTo']?.toDouble() ?? 1.0,
       );
 }

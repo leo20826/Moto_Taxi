@@ -1,7 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-enum LocationSource { gps, network }
-
 class LocationPoint extends Equatable {
   final double latitude;
   final double longitude;
@@ -10,7 +8,6 @@ class LocationPoint extends Equatable {
   final double speed;
   final DateTime timestamp;
   final double? heading;
-  final LocationSource source;
   final bool isInterpolated;
 
   const LocationPoint({
@@ -21,12 +18,11 @@ class LocationPoint extends Equatable {
     required this.speed,
     required this.timestamp,
     this.heading,
-    this.source = LocationSource.gps,
     this.isInterpolated = false,
   });
 
   @override
-  List<Object?> get props => [latitude, longitude, timestamp, source];
+  List<Object?> get props => [latitude, longitude, timestamp];
 
   LocationPoint copyWith({
     double? latitude,
@@ -36,7 +32,6 @@ class LocationPoint extends Equatable {
     double? speed,
     DateTime? timestamp,
     double? heading,
-    LocationSource? source,
     bool? isInterpolated,
   }) {
     return LocationPoint(
@@ -47,7 +42,6 @@ class LocationPoint extends Equatable {
       speed: speed ?? this.speed,
       timestamp: timestamp ?? this.timestamp,
       heading: heading ?? this.heading,
-      source: source ?? this.source,
       isInterpolated: isInterpolated ?? this.isInterpolated,
     );
   }

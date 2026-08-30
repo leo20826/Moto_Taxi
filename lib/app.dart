@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/theme.dart';
 import 'presentation/screens/home_screen.dart';
 
 class MotoTaxiApp extends StatelessWidget {
@@ -10,20 +11,20 @@ class MotoTaxiApp extends StatelessWidget {
       title: 'Moto Taxi',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.black,
-        primaryColor: Colors.yellow[700],
+        scaffoldBackgroundColor: AppTheme.darkBackground,
+        primaryColor: AppTheme.primaryYellow,
         colorScheme: ColorScheme.dark(
-          primary: Colors.yellow[700]!,
-          secondary: Colors.yellow[700]!,
-          surface: Colors.grey[900]!,
+          primary: AppTheme.primaryYellow,
+          secondary: AppTheme.primaryYellow,
+          surface: AppTheme.surfaceGrey,
         ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.grey[900],
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppTheme.surfaceGrey,
           elevation: 0,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.yellow[700],
+            backgroundColor: AppTheme.primaryYellow,
             foregroundColor: Colors.black,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

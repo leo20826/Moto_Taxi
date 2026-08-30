@@ -36,7 +36,6 @@ class GpsInterpolator {
             speed: lastSpeed,
             timestamp: lastKnown.timestamp.add(Duration(seconds: i * 5)),
             heading: lastKnown.heading,
-            source: LocationSource.gps,
             isInterpolated: true,
           ),
         );

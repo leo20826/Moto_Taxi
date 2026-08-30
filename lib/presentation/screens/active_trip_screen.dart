@@ -27,11 +27,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WakelockPlus.enable();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -59,7 +61,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
 
   @override
   Widget build(BuildContext context) {
-    WakelockPlus.enable();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
     return BlocProvider(
@@ -188,7 +189,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
               GpsStatusIndicator(
                 accuracy: trip.routePoints.last.accuracy,
                 speed: trip.currentSpeed,
-                source: trip.routePoints.last.source,
+                status: state.gpsStatus,
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../data/models/location_point.dart';
+import '../../data/repositories/location_repository.dart';
 
 class GpsStatusIndicator extends StatelessWidget {
   final double accuracy;
   final double speed;
-  final LocationSource source;
+  final GpsStatus status;
 
   const GpsStatusIndicator({
     super.key,
     required this.accuracy,
     required this.speed,
-    this.source = LocationSource.gps,
+    this.status = GpsStatus.good,
   });
 
   @override
@@ -19,23 +19,41 @@ class GpsStatusIndicator extends StatelessWidget {
     late final IconData statusIcon;
     late final String label;
 
-    if (source == LocationSource.network) {
-      statusColor = Colors.blue;
-      statusIcon = Icons.signal_cellular_alt;
-      label = 'RED MÓVIL';
-    } else if (accuracy < 10) {
-      statusColor = Colors.green;
-      statusIcon = Icons.gps_fixed;
-      label = 'GPS';
-    } else if (accuracy < 30) {
-      statusColor = Colors.yellow;
-      statusIcon = Icons.gps_fixed;
-      label = 'GPS';
-    } else {
-      statusColor = Colors.orange;
-      statusIcon = Icons.gps_not_fixed;
-      label = 'DÉBIL';
+    switch (status) {
+      case GpsStatus.lost:
+        statusColor = Colors.red;
+        statusIcon = Icons.gps_off;
+        label = 'SIN SEÑAL';
+        break;
+      case GpsStatus.error:
+        statusColor = Colors.red;
+        statusIcon = Icons.error_outline;
+        label = 'ERROR GPS';
+        break;
+      case GpsStatus.poorAccuracy:
+        statusColor = Colors.orange;
+        statusIcon = Icons.gps_not_fixed;
+        label = 'DÉBIL';
+        break;
+      case GpsStatus.fairAccuracy:
+        statusColor = Colors.yellow;
+        statusIcon = Icons.gps_fixed;
+        label = 'GPS';
+        break;
+      case GpsStatus.good:
+      case GpsStatus.recovered:
+      case GpsStatus.serviceDisabled:
+      case GpsStatus.permissionDenied:
+      case GpsStatus.permissionDeniedForever:
+        statusColor = Colors.green;
+        statusIcon = Icons.gps_fixed;
+        label = 'GPS';
+        break;
     }
+
+    final showAccuracy = status != GpsStatus.lost &&
+        status != GpsStatus.error &&
+        accuracy > 0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -57,7 +75,7 @@ class GpsStatusIndicator extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (source == LocationSource.gps && accuracy > 0) ...[
+          if (showAccuracy) ...[
             const SizedBox(width: 4),
             Text(
               '${accuracy.toStringAsFixed(0)}m',

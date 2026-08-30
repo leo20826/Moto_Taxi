@@ -29,9 +29,9 @@ class DistanceCalculator {
     if (points.length < 2) return 0.0;
 
     double total = 0.0;
+    LocationPoint prev = points[0];
 
     for (int i = 1; i < points.length; i++) {
-      final prev = points[i - 1];
       final curr = points[i];
 
       // FILTRO 1: Precisión insuficiente
@@ -50,6 +50,7 @@ class DistanceCalculator {
       if (segment < minDistance) continue;
 
       total += segment;
+      prev = curr; // Solo avanzamos "prev" cuando el punto pasó los filtros
     }
 
     return total;

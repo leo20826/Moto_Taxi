@@ -16,6 +16,7 @@ part 'trip_state.dart';
 class TripCubit extends Cubit<TripState> {
   final LocationRepository _locationRepository;
   StreamSubscription? _locationSub;
+  StreamSubscription? _statusSub;
   Timer? _priceUpdateTimer;
   FareConfig _fareConfig = const FareConfig();
 
@@ -49,7 +50,15 @@ class TripCubit extends Cubit<TripState> {
         return;
     }
 
-    final currentLocation = await _locationRepository.getCurrentLocation();
+    LocationPoint currentLocation;
+    try {
+      currentLocation = await _locationRepository.getCurrentLocation();
+    } catch (e) {
+      emit(const TripError(
+          'No se pudo obtener señal GPS. Sal a un lugar más despejado e intenta de nuevo.'));
+      return;
+    }
+
     _lastPoint = currentLocation;
     _lastPointTime = DateTime.now();
     _lastSpeed = currentLocation.speed;
@@ -68,6 +77,7 @@ class TripCubit extends Cubit<TripState> {
       _onNewLocation,
       onError: (error) => emit(TripError('Error GPS: $error')),
     );
+    _statusSub = _locationRepository.statusStream.listen(_onGpsStatusUpdate);
 
     _priceUpdateTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -145,6 +155,12 @@ class TripCubit extends Cubit<TripState> {
     ));
   }
 
+  void _onGpsStatusUpdate(GpsStatus status) {
+    if (state is! TripInProgress) return;
+    final currentState = state as TripInProgress;
+    emit(currentState.copyWith(gpsStatus: status));
+  }
+
   void _updatePrice() {
     if (state is! TripInProgress) return;
 
@@ -162,6 +178,7 @@ class TripCubit extends Cubit<TripState> {
 
   Future<void> endTrip() async {
     _locationSub?.cancel();
+    _statusSub?.cancel();
     _priceUpdateTimer?.cancel();
     _locationRepository.stopTracking();
 
@@ -196,6 +213,7 @@ class TripCubit extends Cubit<TripState> {
   @override
   Future<void> close() {
     _locationSub?.cancel();
+    _statusSub?.cancel();
     _priceUpdateTimer?.cancel();
     _locationRepository.dispose();
     return super.close();
