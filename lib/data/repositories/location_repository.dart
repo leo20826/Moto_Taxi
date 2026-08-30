@@ -33,7 +33,10 @@ class LocationRepository {
   Stream<LocationPoint> get locationStream => _locationController.stream;
   Stream<GpsStatus> get statusStream => _statusController.stream;
 
-  /// Verifica y solicita permisos de forma robusta para TODAS las versiones de Android
+  /// Verifica y solicita permiso de ubicación en primer plano.
+  /// Esta app solo necesita GPS mientras la carrera está activa y la
+  /// pantalla encendida (ver wakelock en ActiveTripScreen); no requiere
+  /// ubicación en segundo plano.
   Future<PermissionResult> checkAndRequestPermission() async {
     // 1. Verificar que el GPS del sistema esté activado
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -55,16 +58,6 @@ class LocationRepository {
 
     if (status.isDenied) {
       return PermissionResult.denied;
-    }
-
-    // 3. Si tenemos permiso de primer plano, verificar background
-    //    En Android 10+ (API 29+) el background es aparte
-    PermissionStatus backgroundStatus = await Permission.locationAlways.status;
-    if (backgroundStatus.isDenied && !backgroundStatus.isPermanentlyDenied) {
-      // Solicitamos background solo si es necesario para tu caso
-      // Para moto taxi, foreground service con notificación es suficiente
-      // Si quieres tracking con pantalla apagada, descomenta la siguiente línea:
-      // await Permission.locationAlways.request();
     }
 
     return PermissionResult.granted;
