@@ -13,7 +13,7 @@ class MotoTaxiApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: AppTheme.darkBackground,
         primaryColor: AppTheme.primaryYellow,
-        colorScheme: ColorScheme.dark(
+        colorScheme: const ColorScheme.dark(
           primary: AppTheme.primaryYellow,
           secondary: AppTheme.primaryYellow,
           surface: AppTheme.surfaceGrey,

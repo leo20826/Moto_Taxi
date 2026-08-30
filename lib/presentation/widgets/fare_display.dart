@@ -21,7 +21,7 @@ class FareDisplay extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.yellow.withOpacity(0.3),
+            color: Colors.yellow.withValues(alpha: 0.3),
             blurRadius: 20,
             spreadRadius: 5,
           ),

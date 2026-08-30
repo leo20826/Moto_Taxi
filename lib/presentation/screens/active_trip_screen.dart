@@ -360,7 +360,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
       child: GestureDetector(
         onTap: () {},
         child: Container(
-          color: Colors.black.withOpacity(0.9),
+          color: Colors.black.withValues(alpha: 0.9),
           child: SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

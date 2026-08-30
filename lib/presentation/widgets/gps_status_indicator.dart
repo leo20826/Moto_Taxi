@@ -60,7 +60,7 @@ class GpsStatusIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: statusColor.withOpacity(0.5)),
+        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

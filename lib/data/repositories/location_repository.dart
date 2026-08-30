@@ -89,13 +89,16 @@ class LocationRepository {
   }
 
   Future<LocationPoint> getCurrentLocation() async {
+    // NOTA: geolocator ^10.1.0 (versión resuelta en este proyecto) todavía no
+    // soporta el parámetro `locationSettings` en getCurrentPosition (eso se
+    // agregó hasta la v13.0.0). Usamos los parámetros clásicos, que en esta
+    // versión sí permiten forzar el LocationManager de Android (GPS puro).
+    // Si se agota el tiempo (timeLimit), el propio plugin lanza un
+    // TimeoutException que TripCubit captura y traduce a un mensaje claro.
     final position = await Geolocator.getCurrentPosition(
-      locationSettings: _buildLocationSettings(),
-    ).timeout(
-      const Duration(seconds: 20),
-      onTimeout: () => throw TimeoutException(
-        'No se pudo obtener señal GPS. Sal a un lugar más despejado.',
-      ),
+      desiredAccuracy: LocationAccuracy.bestForNavigation,
+      forceAndroidLocationManager: true,
+      timeLimit: const Duration(seconds: 20),
     );
 
     _lastKnownPoint = _mapToLocationPoint(position);
@@ -195,7 +198,7 @@ class LocationRepository {
         accuracy: position.accuracy,
         altitude: position.altitude,
         speed: position.speed,
-        timestamp: position.timestamp ?? DateTime.now(),
+        timestamp: position.timestamp,
         heading: position.heading,
       );
 }
