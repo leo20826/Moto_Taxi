@@ -29,8 +29,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable();
-    _tripCubit = TripCubit(LocationRepository())
-      ..initialize(widget.fareConfig);
+    _tripCubit = TripCubit(LocationRepository())..initialize(widget.fareConfig);
   }
 
   @override
@@ -69,35 +68,92 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
 
     return BlocProvider.value(
       value: _tripCubit,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            SafeArea(
-              child: BlocConsumer<TripCubit, TripState>(
-                listener: (context, state) {
-                  if (state is TripCompleted) {
-                    WakelockPlus.disable();
-                    _showTripSummary(context, state);
-                  }
-                },
-                builder: (context, state) {
-                  if (state is TripInitial) {
-                    return _buildStartView(context);
-                  }
-                  if (state is TripInProgress) {
-                    return _buildActiveTripView(context, state);
-                  }
-                  if (state is TripError) {
-                    return _buildErrorState(context, state);
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+      child: BlocBuilder<TripCubit, TripState>(
+        buildWhen: (prev, curr) =>
+            (prev is TripInProgress) != (curr is TripInProgress),
+        builder: (context, state) => PopScope(
+          // Con una carrera en curso se bloquea la salida directa (botón
+          // atrás / gesto) para no perder el viaje por un toque accidental.
+          canPop: state is! TripInProgress,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            _handleBackPressed(context);
+          },
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              children: [
+                SafeArea(
+                  child: BlocConsumer<TripCubit, TripState>(
+                    listener: (context, state) {
+                      if (state is TripCompleted) {
+                        WakelockPlus.disable();
+                        _showTripSummary(context, state);
+                      }
+                    },
+                    builder: (context, state) {
+                      if (state is TripInitial) {
+                        return _buildStartView(context);
+                      }
+                      if (state is TripInProgress) {
+                        return _buildActiveTripView(context, state);
+                      }
+                      if (state is TripError) {
+                        return _buildErrorState(context, state);
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+                if (_isLocked) _buildLockOverlay(context),
+              ],
             ),
-            if (_isLocked) _buildLockOverlay(context),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  /// Se llama cuando el usuario intenta salir con una carrera activa.
+  void _handleBackPressed(BuildContext context) {
+    // Pantalla bloqueada: ignorar el botón atrás y avisar cómo desbloquear.
+    if (_isLocked) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content:
+                Text('Pantalla bloqueada. Mantén presionado para desbloquear.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Carrera en curso',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Si sales ahora se perderá el seguimiento. ¿Quieres continuar la carrera o finalizarla y cobrar?',
+          style: TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('CONTINUAR'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<TripCubit>().endTrip();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('FINALIZAR'),
+          ),
+        ],
       ),
     );
   }
