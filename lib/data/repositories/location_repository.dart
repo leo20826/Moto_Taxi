@@ -138,6 +138,7 @@ class LocationRepository {
       return AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: AppConstants.distanceFilterMeters,
+        intervalDuration: const Duration(seconds: AppConstants.gpsIntervalSeconds),
         forceLocationManager: AppConstants.forceGpsOnly,
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Moto Taxi',
@@ -159,8 +160,7 @@ class LocationRepository {
 
   void _onPositionUpdate(Position position) {
     if (_lastKnownTime != null) {
-      final gap = DateTime.now().difference(_lastKnownTime!);
-      if (gap.inSeconds > 6 && _wasPaused) {
+      if (_wasPaused) {
         _statusController.add(GpsStatus.recovered);
       }
     }
@@ -184,8 +184,13 @@ class LocationRepository {
   void _checkSignalHealth() {
     if (_lastKnownTime == null) return;
 
+    // Parado (semáforo, tráfico): con distanceFilter no llegan posiciones
+    // nuevas y eso es normal, no es pérdida de señal.
+    final lastSpeed = _lastKnownPoint?.speed ?? 0;
+    if (lastSpeed < AppConstants.stoppedSpeedMps) return;
+
     final gap = DateTime.now().difference(_lastKnownTime!);
-    if (gap.inSeconds > 5 && !_wasPaused) {
+    if (gap.inSeconds > AppConstants.gpsLostAfterSeconds && !_wasPaused) {
       _wasPaused = true;
       _statusController.add(GpsStatus.lost);
     }
