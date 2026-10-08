@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../data/models/fare_config.dart';
+import '../../data/models/trip_draft.dart';
 import '../../data/repositories/location_repository.dart';
 import '../blocs/trip_cubit.dart';
 import '../widgets/fare_display.dart';
@@ -12,7 +13,15 @@ import '../widgets/trip_controls.dart';
 
 class ActiveTripScreen extends StatefulWidget {
   final FareConfig fareConfig;
-  const ActiveTripScreen({super.key, required this.fareConfig});
+
+  /// Si viene, la pantalla reanuda esa carrera en vez de empezar una nueva.
+  final TripDraft? resumeDraft;
+
+  const ActiveTripScreen({
+    super.key,
+    required this.fareConfig,
+    this.resumeDraft,
+  });
 
   @override
   State<ActiveTripScreen> createState() => _ActiveTripScreenState();
@@ -30,6 +39,15 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable();
     _tripCubit = TripCubit(LocationRepository())..initialize(widget.fareConfig);
+
+    // Reanudar una carrera interrumpida: arranca sola mostrando "esperando GPS".
+    final draft = widget.resumeDraft;
+    if (draft != null) {
+      _isLoading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _tripCubit.resumeFrom(draft);
+      });
+    }
   }
 
   @override
@@ -560,8 +578,12 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
     showModalBottomSheet(
       context: context,
       isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.grey[900],
-      builder: (_) => Container(
+      builder: (_) => PopScope(
+        // La carrera ya quedó guardada; solo se sale con "NUEVA CARRERA".
+        canPop: false,
+        child: Container(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -605,6 +627,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -85,7 +85,7 @@ class _FareSettingsScreenState extends State<FareSettingsScreen> {
           child: ListView(
             children: [
               _buildField('Tarifa Base (\$)', _baseController, '15.00'),
-              _buildField('Precio por Km (\$)', _kmController, '8.00'),
+              _buildField('Precio por Km (\$)', _kmController, '10.00'),
               _buildField('Precio por Minuto (\$)', _minController, '1.50'),
               _buildField('Tarifa Mínima (\$)', _minFareController, '20.00'),
 

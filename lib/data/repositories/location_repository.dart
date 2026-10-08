@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../core/constants.dart';
 import '../models/location_point.dart';
 
 enum PermissionResult {
@@ -60,6 +61,16 @@ class LocationRepository {
       return PermissionResult.denied;
     }
 
+    // Android 13+: permiso para mostrar el aviso "Carrera en curso" del
+    // servicio en primer plano. Si se niega, el rastreo funciona igual (solo
+    // que el aviso no se ve), por eso no bloquea la carrera.
+    try {
+      final notif = await Permission.notification.status;
+      if (notif.isDenied) {
+        await Permission.notification.request();
+      }
+    } catch (_) {}
+
     return PermissionResult.granted;
   }
 
@@ -90,7 +101,7 @@ class LocationRepository {
     // TimeoutException que TripCubit captura y traduce a un mensaje claro.
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.bestForNavigation,
-      forceAndroidLocationManager: true,
+      forceAndroidLocationManager: AppConstants.forceGpsOnly,
       timeLimit: const Duration(seconds: 20),
     );
 
@@ -119,13 +130,22 @@ class LocationRepository {
         const Duration(seconds: 3), (_) => _checkSignalHealth());
   }
 
-  /// Configuración de ubicación forzando GPS puro (sin red móvil/Wi-Fi).
+  /// Configuración de ubicación. En Android se usa un servicio en primer plano
+  /// con notificación: así el GPS sigue contando aunque el conductor conteste
+  /// una llamada o abra otra app (WhatsApp, etc.).
   LocationSettings _buildLocationSettings() {
     if (defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 3,
-        forceLocationManager: true, // Usa el proveedor GPS real, no el Fused
+        distanceFilter: AppConstants.distanceFilterMeters,
+        forceLocationManager: AppConstants.forceGpsOnly,
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'Moto Taxi',
+          notificationText: 'Carrera en curso: calculando el recorrido por GPS',
+          notificationChannelName: 'Carrera en curso',
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
       );
     }
     // iOS/otras plataformas no tienen un equivalente a "solo GPS": el
@@ -133,7 +153,7 @@ class LocationRepository {
     // bestForNavigation ya pide la máxima precisión disponible.
     return const LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 3,
+      distanceFilter: AppConstants.distanceFilterMeters,
     );
   }
 

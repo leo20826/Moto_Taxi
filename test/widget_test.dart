@@ -3,12 +3,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:moto_taxi_app/app.dart';
 
 void main() {
   testWidgets('La app arranca y muestra la pantalla principal',
       (WidgetTester tester) async {
+    // La pantalla principal lee SharedPreferences (tarifas y borrador).
+    SharedPreferences.setMockInitialValues({});
+
     await tester.pumpWidget(const MotoTaxiApp());
     await tester.pumpAndSettle();
 

@@ -3,14 +3,20 @@ import '../../data/models/location_point.dart';
 import 'distance_calculator.dart';
 
 class PriceCalculator {
+  /// [extraDistanceMeters] es la distancia ya recorrida antes de [route]
+  /// (por ejemplo, al reanudar una carrera que quedó guardada).
   static double calculate({
     required List<LocationPoint> route,
     required FareConfig config,
     required DateTime startTime,
+    double extraDistanceMeters = 0,
+    DateTime? now,
   }) {
-    final distanceKm = DistanceCalculator.calculateRouteDistance(route) / 1000;
+    final distanceKm =
+        (extraDistanceMeters + DistanceCalculator.calculateRouteDistance(route)) /
+            1000;
     final durationMinutes =
-        DateTime.now().difference(startTime).inSeconds / 60.0;
+        (now ?? DateTime.now()).difference(startTime).inSeconds / 60.0;
 
     double price = config.baseFare;
     price += distanceKm * config.pricePerKm;
@@ -21,7 +27,10 @@ class PriceCalculator {
     }
 
     if (config.roundTo > 0.0) {
-      price = (price / config.roundTo).ceil() * config.roundTo.toDouble();
+      // Primero a centavos: evita que 30.0000001 suba un peso de más por
+      // errores de punto flotante.
+      final cents = double.parse(price.toStringAsFixed(2));
+      price = ((cents / config.roundTo) - 1e-9).ceil() * config.roundTo;
     }
 
     return price;

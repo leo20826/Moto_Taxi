@@ -1,17 +1,35 @@
-# moto_taxi
+# Moto Taxi
 
-A Flutter project.
+Calculadora de tarifas con GPS para mototaxistas (Flutter, Android).
 
-## Getting Started
+## Flujo de trabajo (Git)
 
-This project is a starting point for a Flutter application.
+- `main`: versión estable, de la que se genera el APK de release.
+- `develop`: integración. Aquí se unen y prueban los cambios nuevos.
+- `feature/...`: una rama por cambio, creada desde `develop`; se une con Pull Request.
 
-A few resources to get you started if this is your first Flutter project:
+## Comandos habituales
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter run                      # prueba en el celular
+flutter build apk --release      # APK de producción (requiere android/key.properties)
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Antes de hacer commit: agrega solo los archivos que cambiaste
+(`git add <archivo>`). Evita `git add .` / `git commit -a`, porque `flutter`
+puede modificar `pubspec.lock` sin que lo hayas pedido.
+
+## Ajustes útiles
+
+- `lib/core/constants.dart` → `forceGpsOnly`: `true` usa GPS puro; si en la calle
+  tarda mucho en obtener el primer punto, ponerlo en `false` (GPS + red).
+- **Calentamiento del GPS:** al abrir la app, la pantalla principal empieza a buscar
+  satélites y muestra "GPS LISTO" o "BUSCANDO GPS". Se apaga solo al iniciar la
+  carrera, al minimizar la app o al salir.
+- La carrera en curso se guarda cada ~10 s; si la app se cierra, al abrirla
+  ofrece **Reanudar** o **Descartar**.
+- Mientras hay una carrera activa, Android muestra una notificación
+  "Carrera en curso": es el servicio en primer plano que mantiene el GPS.

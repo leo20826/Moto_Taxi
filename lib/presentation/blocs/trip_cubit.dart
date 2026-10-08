@@ -3,31 +3,53 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../core/utils/distance_calculator.dart';
 import '../../core/utils/price_calculator.dart';
-import '../../core/utils/gps_interpolator.dart';
 import '../../data/models/location_point.dart';
 import '../../data/models/trip.dart';
 import '../../data/models/fare_config.dart';
+import '../../data/models/trip_draft.dart';
+import '../../data/repositories/gps_warmup_service.dart';
 import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/trip_database.dart';
+import '../../data/repositories/trip_draft_repository.dart';
 import '../../data/models/trip_record.dart';
 
 part 'trip_state.dart';
 
 class TripCubit extends Cubit<TripState> {
   final LocationRepository _locationRepository;
+  final TripDraftRepository _draftRepository;
   StreamSubscription? _locationSub;
   StreamSubscription? _statusSub;
   Timer? _priceUpdateTimer;
   FareConfig _fareConfig = const FareConfig();
 
-  LocationPoint? _lastPoint;
-  DateTime? _lastPointTime;
-  double _lastSpeed = 0;
+  /// Borrador por reanudar (si la carrera se interrumpió).
+  TripDraft? _pendingDraft;
 
-  TripCubit(this._locationRepository) : super(const TripInitial());
+  /// Distancia ya recorrida antes de los puntos de la sesión actual
+  /// (solo > 0 al reanudar una carrera).
+  double _baseDistance = 0;
+  int _ticks = 0;
+
+  /// Si la carrera se reanuda hasta este tiempo después del último guardado,
+  /// se suma en línea recta el tramo entre el último punto guardado y el
+  /// punto actual.
+  static const Duration _maxGapToBridge = Duration(minutes: 30);
+
+  TripCubit(this._locationRepository, [TripDraftRepository? draftRepository])
+      : _draftRepository = draftRepository ?? TripDraftRepository(),
+        super(const TripInitial());
 
   void initialize(FareConfig config) {
     _fareConfig = config;
+  }
+
+  /// Reanuda una carrera guardada: usa la tarifa con la que empezó, conserva
+  /// el tiempo y la distancia acumulados y vuelve a rastrear el GPS.
+  Future<void> resumeFrom(TripDraft draft) {
+    _pendingDraft = draft;
+    _fareConfig = draft.config;
+    return startTrip();
   }
 
   /// Inicia la carrera verificando permisos de forma robusta
@@ -59,18 +81,58 @@ class TripCubit extends Cubit<TripState> {
       return;
     }
 
-    _lastPoint = currentLocation;
-    _lastPointTime = DateTime.now();
-    _lastSpeed = currentLocation.speed;
+    // Ya hay primer punto: el rastreo de la carrera toma el relevo del
+    // calentamiento (el chip GPS sigue "caliente").
+    GpsWarmupService.instance.stop();
+
+    final now = DateTime.now();
+    final draft = _pendingDraft;
+    _pendingDraft = null;
+
+    String tripId = now.millisecondsSinceEpoch.toString();
+    DateTime startTime = now;
+    _baseDistance = 0;
+
+    if (draft != null) {
+      tripId = draft.id;
+      // El tiempo en que la app estuvo cerrada no se cobra por minuto.
+      startTime = now.subtract(Duration(seconds: draft.elapsedSeconds));
+      _baseDistance = draft.distanceMeters;
+
+      // Tramo recorrido mientras la app no estaba rastreando.
+      final sinceSave = now.difference(draft.savedAt);
+      if (sinceSave <= _maxGapToBridge && currentLocation.accuracy <= 30) {
+        final gap = DistanceCalculator.haversine(
+            draft.lastPoint, currentLocation);
+        final speedKmh = sinceSave.inSeconds > 0
+            ? (gap / sinceSave.inSeconds) * 3.6
+            : 0.0;
+        if (speedKmh <= 120) _baseDistance += gap;
+      }
+    }
+
+    final initialPrice = PriceCalculator.calculate(
+      route: [currentLocation],
+      config: _fareConfig,
+      startTime: startTime,
+      extraDistanceMeters: _baseDistance,
+    );
 
     final trip = Trip(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: tripId,
       routePoints: [currentLocation],
-      startTime: DateTime.now(),
+      startTime: startTime,
+      totalDistance: _baseDistance,
+      totalPrice: initialPrice,
       isActive: true,
     );
 
     emit(TripInProgress(trip: trip));
+    _saveDraft();
+
+    _locationSub?.cancel();
+    _statusSub?.cancel();
+    _priceUpdateTimer?.cancel();
 
     _locationRepository.startTracking();
     _locationSub = _locationRepository.locationStream.listen(
@@ -79,9 +141,10 @@ class TripCubit extends Cubit<TripState> {
     );
     _statusSub = _locationRepository.statusStream.listen(_onGpsStatusUpdate);
 
+    _ticks = 0;
     _priceUpdateTimer = Timer.periodic(
       const Duration(seconds: 1),
-      (_) => _updatePrice(),
+      (_) => _onTick(),
     );
   }
 
@@ -112,38 +175,18 @@ class TripCubit extends Cubit<TripState> {
 
     final currentState = state as TripInProgress;
     final updatedPoints =
-        List<LocationPoint>.from(currentState.trip.routePoints);
+        List<LocationPoint>.from(currentState.trip.routePoints)..add(point);
 
-    // Detectar gap e interpolar si es necesario
-    if (_lastPoint != null && _lastPointTime != null) {
-      final gap = point.timestamp.difference(_lastPointTime!);
-
-      if (gap.inSeconds > 10) {
-        final interpolated = GpsInterpolator.interpolateGap(
-          lastKnown: _lastPoint!,
-          firstNew: point,
-          gapDuration: gap,
-          lastSpeed: _lastSpeed,
-        );
-
-        for (int i = 0; i < interpolated.length - 1; i++) {
-          updatedPoints.add(interpolated[i]);
-        }
-      }
-    }
-
-    updatedPoints.add(point);
-
+    // Si hubo un hueco de señal (túnel, etc.), el siguiente punto real se une
+    // en línea recta al último punto bueno (ver DistanceCalculator).
     final newDistance =
-        DistanceCalculator.calculateRouteDistance(updatedPoints);
-    _lastPoint = point;
-    _lastPointTime = point.timestamp;
-    _lastSpeed = point.speed;
+        _baseDistance + DistanceCalculator.calculateRouteDistance(updatedPoints);
 
     final newPrice = PriceCalculator.calculate(
       route: updatedPoints,
       config: _fareConfig,
       startTime: currentState.trip.startTime,
+      extraDistanceMeters: _baseDistance,
     );
 
     emit(currentState.copyWith(
@@ -161,6 +204,13 @@ class TripCubit extends Cubit<TripState> {
     emit(currentState.copyWith(gpsStatus: status));
   }
 
+  void _onTick() {
+    _updatePrice();
+    _ticks++;
+    // Punto de control cada ~10 segundos.
+    if (_ticks % 10 == 0) _saveDraft();
+  }
+
   void _updatePrice() {
     if (state is! TripInProgress) return;
 
@@ -169,11 +219,29 @@ class TripCubit extends Cubit<TripState> {
       route: currentState.trip.routePoints,
       config: _fareConfig,
       startTime: currentState.trip.startTime,
+      extraDistanceMeters: _baseDistance,
     );
 
     emit(currentState.copyWith(
       trip: currentState.trip.copyWith(totalPrice: newPrice),
     ));
+  }
+
+  void _saveDraft() {
+    if (state is! TripInProgress) return;
+    final trip = (state as TripInProgress).trip;
+    if (trip.routePoints.isEmpty) return;
+
+    final now = DateTime.now();
+    unawaited(_draftRepository.save(TripDraft(
+      id: trip.id,
+      startTime: trip.startTime,
+      elapsedSeconds: now.difference(trip.startTime).inSeconds,
+      distanceMeters: trip.totalDistance,
+      lastPoint: trip.routePoints.last,
+      config: _fareConfig,
+      savedAt: now,
+    )));
   }
 
   Future<void> endTrip() async {
@@ -189,6 +257,7 @@ class TripCubit extends Cubit<TripState> {
         route: currentState.trip.routePoints,
         config: _fareConfig,
         startTime: currentState.trip.startTime,
+        extraDistanceMeters: _baseDistance,
       );
 
       final completedTrip = currentState.trip.copyWith(
@@ -206,12 +275,17 @@ class TripCubit extends Cubit<TripState> {
         price: completedTrip.totalPrice,
       ));
 
+      // La carrera ya quedó en el historial: el borrador ya no hace falta.
+      await _draftRepository.clear();
+
       emit(TripCompleted(trip: completedTrip));
     }
   }
 
   @override
   Future<void> close() {
+    // Ojo: aquí NO se borra el borrador. Si la pantalla se destruye con una
+    // carrera en curso, queda guardada para poder reanudarla.
     _locationSub?.cancel();
     _statusSub?.cancel();
     _priceUpdateTimer?.cancel();

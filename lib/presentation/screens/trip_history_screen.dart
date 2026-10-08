@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/repositories/trip_database.dart';
@@ -28,14 +29,72 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     });
   }
 
-  double get _totalToday {
+  List<TripRecord> get _tripsToday {
     final now = DateTime.now();
     return _trips
         .where((t) =>
             t.startTime.year == now.year &&
             t.startTime.month == now.month &&
             t.startTime.day == now.day)
-        .fold(0.0, (sum, t) => sum + t.price);
+        .toList();
+  }
+
+  double get _totalToday => _tripsToday.fold(0.0, (sum, t) => sum + t.price);
+
+  double get _kmToday =>
+      _tripsToday.fold(0.0, (sum, t) => sum + t.distance) / 1000;
+
+  /// Copia al portapapeles un resumen del día para pegarlo en WhatsApp, etc.
+  Future<void> _copyTodaySummary() async {
+    final today = _tripsToday;
+    final date = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    final buffer = StringBuffer()
+      ..writeln('Resumen Moto Taxi - $date')
+      ..writeln('Carreras: ${today.length}')
+      ..writeln('Kilómetros: ${_kmToday.toStringAsFixed(2)} km')
+      ..writeln('Total: \$${_totalToday.toStringAsFixed(2)}');
+    if (today.isNotEmpty) {
+      buffer.writeln();
+      final timeFmt = DateFormat('HH:mm');
+      for (final t in today.reversed) {
+        buffer.writeln(
+            '${timeFmt.format(t.startTime)}  ${(t.distance / 1000).toStringAsFixed(2)} km  \$${t.price.toStringAsFixed(2)}');
+      }
+    }
+    await Clipboard.setData(ClipboardData(text: buffer.toString().trimRight()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Resumen del día copiado')),
+    );
+  }
+
+  Future<void> _confirmDeleteOne(TripRecord trip) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Borrar carrera?',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Se eliminará la carrera de \$${trip.price.toStringAsFixed(2)}.',
+          style: const TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('CANCELAR')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('BORRAR'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await TripDatabase.instance.delete(trip.id);
+      _loadTrips();
+    }
   }
 
   Future<void> _confirmDeleteAll() async {
@@ -74,6 +133,11 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
         backgroundColor: Colors.grey[900],
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            onPressed: _copyTodaySummary,
+            icon: const Icon(Icons.copy_all_outlined),
+            tooltip: 'Copiar resumen de hoy',
+          ),
           IconButton(
             onPressed: _confirmDeleteAll,
             icon: const Icon(Icons.delete_outline),
@@ -130,6 +194,11 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            '${_tripsToday.length} carreras • ${_kmToday.toStringAsFixed(1)} km',
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+          ),
         ],
       ),
     );
@@ -165,10 +234,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
         ),
         trailing: IconButton(
           icon: Icon(Icons.delete, color: Colors.red[300], size: 20),
-          onPressed: () async {
-            await TripDatabase.instance.delete(trip.id);
-            _loadTrips();
-          },
+          onPressed: () => _confirmDeleteOne(trip),
         ),
       ),
     );

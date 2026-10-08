@@ -1,0 +1,32 @@
+Descripción:
+Calculadora de tarifas con GPS para mototaxistas. Inicia la carrera, conduce y cobra lo justo sin adivinar.
+
+Moto Taxi Calculadora es tu aliado en el camino. Solo configura tu tarifa, presiona INICIAR y deja que el GPS haga el trabajo.
+
+La app calcula automáticamente el precio según los kilómetros recorridos y el tiempo.
+
+Bloquea la pantalla mientras conduces para evitar toques accidentales, revisa tu historial de carreras al final del día y cobra con confianza.
+
+Fácil, rápida y hecha por y para mototaxistas. Sin complicaciones, sin publicidad intrusiva, solo cobra lo que corresponde.
+
+¿Qué hace?
+
+• Calcula el precio automáticamente usando GPS de alta precisión
+
+• Sigue contando la carrera aunque contestes una llamada o abras otra app (muestra un aviso "Carrera en curso")
+
+• Si pierdes señal un momento (túnel, edificios), retoma el cálculo cuando el GPS regresa
+
+• Si la app se cierra por error, te deja reanudar la carrera donde iba
+
+• Cronómetro y contador de kilómetros en tiempo real
+
+• Bloqueo de pantalla para conducir seguro; el botón "atrás" no cancela la carrera por accidente
+
+• Guarda historial de todas tus carreras y ganancias del día, y copia el resumen del día para compartirlo
+
+• Configura tu propia tarifa: base, por km y por minuto
+
+Hecha para el trabajo real. No necesitas internet para funcionar, solo tu GPS.
+
+Ideal para mototaxistas que quieren cobrar justo y llevar control de sus ingresos.
